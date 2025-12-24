@@ -1,24 +1,26 @@
 import { createClient } from '@supabase/supabase-js';
 import { Lead, LeadInput } from '@/types/lead';
 
-// Get Supabase credentials from environment (check both prefixed and non-prefixed)
-const supabaseUrl = process.env.NEXT_PUBLIC_asapflight_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-// Try service role key first (from Vercel integration), then anon key, then JWT secret as last resort
-const supabaseServiceKey =
-  process.env.asapflight_SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.NEXT_PUBLIC_asapflight_SUPABASE_ANON_KEY ||
-  process.env.asapflight_SUPABASE_JWT_SECRET;
+// Get Supabase credentials from environment
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Validate credentials are present
-if (!supabaseUrl || !supabaseServiceKey) {
-  throw new Error('Missing Supabase environment variables. Please check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are set.');
-}
-
-// Use service role key for server-side operations
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+// Create Supabase client only if credentials are available
+const supabase = supabaseUrl && supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey)
+  : null;
 
 export async function saveLead(lead: LeadInput): Promise<Lead> {
+  // If Supabase is not configured, just return a mock lead
+  if (!supabase) {
+    console.warn('Supabase not configured, lead will not be saved to database');
+    return {
+      id: crypto.randomUUID(),
+      ...lead,
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   const { data, error } = await supabase
     .from('leads')
     .insert([
@@ -39,6 +41,12 @@ export async function saveLead(lead: LeadInput): Promise<Lead> {
 }
 
 export async function getAllLeads(): Promise<Lead[]> {
+  // If Supabase is not configured, return empty array
+  if (!supabase) {
+    console.warn('Supabase not configured, no leads available');
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('leads')
     .select('*')
